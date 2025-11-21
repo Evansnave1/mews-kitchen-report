@@ -231,6 +231,18 @@ Examples:
         help='Output directory. Default: ./demo_reports'
     )
 
+    parser.add_argument(
+        '--notes',
+        type=str,
+        help='Use custom detailed notes file (e.g., notes_detailed.example.json)'
+    )
+
+    parser.add_argument(
+        '--detailed',
+        action='store_true',
+        help='Generate detailed report with service times and prep lists'
+    )
+
     args = parser.parse_args()
 
     # Determine start date
@@ -260,8 +272,22 @@ Examples:
     generator = DemoDataGenerator()
     report = generator.generate_weekly_data(start_date)
 
-    # Add notes unless disabled
-    if not args.no_notes:
+    # Load custom notes if provided
+    if args.notes:
+        try:
+            with open(args.notes, 'r') as f:
+                custom_notes = json.load(f)
+            # Apply notes to report
+            for day in report['daily_breakdown']:
+                if day['date'] in custom_notes:
+                    day['notes'] = custom_notes[day['date']]
+            print(f"✅ Loaded custom notes from: {args.notes}")
+        except FileNotFoundError:
+            print(f"Warning: Notes file not found: {args.notes}")
+        except json.JSONDecodeError as e:
+            print(f"Warning: Invalid JSON in notes file: {e}")
+    # Add demo notes unless disabled or custom notes provided
+    elif not args.no_notes:
         report = add_demo_notes(report)
         print("✅ Demo notes included")
 
@@ -277,15 +303,28 @@ Examples:
         week_str = start_date.strftime('%Y-%m-%d')
         base_filename = f"demo_meal_plan_{week_str}"
 
-        generator = ReportGenerator(report)
+        # Use detailed generator if requested
+        if args.detailed:
+            from detailed_report_generator import DetailedReportGenerator
+            generator = DetailedReportGenerator(report)
+            base_filename = f"demo_meal_plan_detailed_{week_str}"
 
-        if 'excel' in args.format:
-            excel_file = output_dir / f"{base_filename}.xlsx"
-            generator.generate_excel(str(excel_file))
+            if 'excel' in args.format:
+                excel_file = output_dir / f"{base_filename}.xlsx"
+                generator.generate_detailed_excel(str(excel_file))
+        else:
+            generator = ReportGenerator(report)
+
+            if 'excel' in args.format:
+                excel_file = output_dir / f"{base_filename}.xlsx"
+                generator.generate_excel(str(excel_file))
 
         if 'pdf' in args.format:
             pdf_file = output_dir / f"{base_filename}.pdf"
-            generator.generate_pdf(str(pdf_file))
+            if not args.detailed:
+                generator.generate_pdf(str(pdf_file))
+            else:
+                print("Note: Detailed PDF not yet implemented, use Excel format")
 
         if 'json' in args.format:
             json_file = output_dir / f"{base_filename}.json"

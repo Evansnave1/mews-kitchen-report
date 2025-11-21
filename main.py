@@ -13,6 +13,7 @@ from pathlib import Path
 from mews_client import MewsAPIClient
 from meal_planner import MealPlanner
 from report_generator import ReportGenerator
+from detailed_report_generator import DetailedReportGenerator
 
 
 def load_config():
@@ -94,6 +95,12 @@ Examples:
         help='Path to JSON file with notes/comments for the week'
     )
 
+    parser.add_argument(
+        '--detailed',
+        action='store_true',
+        help='Generate detailed report with service times, prep lists, and staffing'
+    )
+
     args = parser.parse_args()
 
     # Determine start date
@@ -164,15 +171,27 @@ Examples:
         week_str = start_date.strftime('%Y-%m-%d')
         base_filename = f"meal_plan_{week_str}"
 
-        generator = ReportGenerator(report)
+        # Choose generator based on detailed flag
+        if args.detailed:
+            generator = DetailedReportGenerator(report)
+            base_filename = f"meal_plan_detailed_{week_str}"
 
-        if 'excel' in args.format:
-            excel_file = output_dir / f"{base_filename}.xlsx"
-            generator.generate_excel(str(excel_file))
+            if 'excel' in args.format:
+                excel_file = output_dir / f"{base_filename}.xlsx"
+                generator.generate_detailed_excel(str(excel_file))
+        else:
+            generator = ReportGenerator(report)
+
+            if 'excel' in args.format:
+                excel_file = output_dir / f"{base_filename}.xlsx"
+                generator.generate_excel(str(excel_file))
 
         if 'pdf' in args.format:
             pdf_file = output_dir / f"{base_filename}.pdf"
-            generator.generate_pdf(str(pdf_file))
+            if not args.detailed:
+                generator.generate_pdf(str(pdf_file))
+            else:
+                print("Note: Detailed PDF not yet implemented, use Excel format for detailed reports")
 
         if 'json' in args.format:
             json_file = output_dir / f"{base_filename}.json"
