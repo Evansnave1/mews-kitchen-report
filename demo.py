@@ -243,6 +243,12 @@ Examples:
         help='Generate detailed report with service times and prep lists'
     )
 
+    parser.add_argument(
+        '--daily-pages',
+        action='store_true',
+        help='Generate clean daily pages format (one page per day with timeline)'
+    )
+
     args = parser.parse_args()
 
     # Determine start date
@@ -303,8 +309,16 @@ Examples:
         week_str = start_date.strftime('%Y-%m-%d')
         base_filename = f"demo_meal_plan_{week_str}"
 
-        # Use detailed generator if requested
-        if args.detailed:
+        # Use appropriate generator based on flags
+        if args.daily_pages:
+            from daily_page_generator import DailyPageGenerator
+            generator = DailyPageGenerator(report)
+            base_filename = f"demo_meal_plan_daily_{week_str}"
+
+            if 'excel' in args.format:
+                excel_file = output_dir / f"{base_filename}.xlsx"
+                generator.generate_daily_pages_excel(str(excel_file))
+        elif args.detailed:
             from detailed_report_generator import DetailedReportGenerator
             generator = DetailedReportGenerator(report)
             base_filename = f"demo_meal_plan_detailed_{week_str}"

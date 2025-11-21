@@ -14,6 +14,7 @@ from mews_client import MewsAPIClient
 from meal_planner import MealPlanner
 from report_generator import ReportGenerator
 from detailed_report_generator import DetailedReportGenerator
+from daily_page_generator import DailyPageGenerator
 
 
 def load_config():
@@ -101,6 +102,12 @@ Examples:
         help='Generate detailed report with service times, prep lists, and staffing'
     )
 
+    parser.add_argument(
+        '--daily-pages',
+        action='store_true',
+        help='Generate clean daily pages format (one page per day with timeline)'
+    )
+
     args = parser.parse_args()
 
     # Determine start date
@@ -171,8 +178,15 @@ Examples:
         week_str = start_date.strftime('%Y-%m-%d')
         base_filename = f"meal_plan_{week_str}"
 
-        # Choose generator based on detailed flag
-        if args.detailed:
+        # Choose generator based on flags
+        if args.daily_pages:
+            generator = DailyPageGenerator(report)
+            base_filename = f"meal_plan_daily_{week_str}"
+
+            if 'excel' in args.format:
+                excel_file = output_dir / f"{base_filename}.xlsx"
+                generator.generate_daily_pages_excel(str(excel_file))
+        elif args.detailed:
             generator = DetailedReportGenerator(report)
             base_filename = f"meal_plan_detailed_{week_str}"
 
