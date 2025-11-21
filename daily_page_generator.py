@@ -15,6 +15,180 @@ class DailyPageGenerator:
     def __init__(self, report_data: Dict):
         self.report_data = report_data
 
+    def generate_daily_pages_pdf(self, filename: str):
+        """
+        Generate PDF with one page per day (Monday to Sunday)
+
+        Args:
+            filename: Output filename
+        """
+        try:
+            from reportlab.lib.pagesizes import letter, landscape
+            from reportlab.lib import colors
+            from reportlab.lib.units import inch
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        except ImportError:
+            print("Error: reportlab not installed. Run: pip install reportlab")
+            return
+
+        # Create PDF in landscape orientation
+        doc = SimpleDocTemplate(filename, pagesize=landscape(letter),
+                               topMargin=0.5*inch, bottomMargin=0.5*inch,
+                               leftMargin=0.5*inch, rightMargin=0.5*inch)
+        elements = []
+
+        styles = getSampleStyleSheet()
+
+        # Custom styles
+        day_header_style = ParagraphStyle(
+            'DayHeader',
+            parent=styles['Heading1'],
+            fontSize=20,
+            textColor=colors.HexColor('#366092'),
+            alignment=TA_CENTER,
+            spaceAfter=6,
+            fontName='Helvetica-Bold'
+        )
+
+        date_style = ParagraphStyle(
+            'DateStyle',
+            parent=styles['Normal'],
+            fontSize=11,
+            alignment=TA_CENTER,
+            spaceAfter=12,
+            textColor=colors.HexColor('#555555')
+        )
+
+        note_style = ParagraphStyle(
+            'NoteStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#CC6600'),
+            leftIndent=10
+        )
+
+        dietary_style = ParagraphStyle(
+            'DietaryStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#CC0000'),
+            leftIndent=10,
+            fontName='Helvetica-Bold'
+        )
+
+        # Generate one page per day
+        for idx, day in enumerate(self.report_data['daily_breakdown']):
+            # Day header
+            elements.append(Paragraph(day['day_name'].upper(), day_header_style))
+
+            # Date and summary
+            date_text = f"{day['date']}  •  {day['total_guests']} Guests  •  {day['breakfast']}B / {day['lunch']}L / {day['dinner']}D"
+            elements.append(Paragraph(date_text, date_style))
+
+            notes = day.get('notes', {})
+
+            # General notes
+            if notes and notes.get('general'):
+                elements.append(Paragraph(f"📋 {notes['general']}", note_style))
+                elements.append(Spacer(1, 0.1*inch))
+
+            # Dietary warnings
+            if notes and notes.get('dietary'):
+                elements.append(Paragraph(f"⚠️ DIETARY: {notes['dietary']}", dietary_style))
+                elements.append(Spacer(1, 0.1*inch))
+
+            elements.append(Spacer(1, 0.2*inch))
+
+            # Build timeline
+            timeline = self._build_timeline(notes)
+
+            # Create timeline table
+            table_data = [['TIME', 'SERVICE', 'GUEST GROUP', 'DETAILS']]
+
+            for entry in timeline:
+                time = entry['time']
+                service = entry['service']
+                group = entry.get('guest_group', '')
+                details = entry['details'].replace('\n', '<br/>')
+
+                table_data.append([time, service, group, details])
+
+            # Create table with wider columns for landscape
+            col_widths = [0.8*inch, 1.5*inch, 1.8*inch, 5.9*inch]
+            timeline_table = Table(table_data, colWidths=col_widths)
+
+            # Table style
+            table_style = [
+                # Header row
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D3D3D3')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Time column centered
+                ('ALIGN', (1, 0), (-1, 0), 'LEFT'),    # Other headers left
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('TOPPADDING', (0, 0), (-1, 0), 8),
+
+                # Data rows
+                ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),  # Time column bold
+                ('FONTSIZE', (0, 1), (0, -1), 10),
+                ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),  # Service column bold
+                ('FONTSIZE', (1, 1), (1, -1), 9),
+                ('FONTNAME', (2, 1), (2, -1), 'Helvetica-Oblique'),  # Group column italic
+                ('FONTSIZE', (2, 1), (2, -1), 8),
+                ('FONTNAME', (3, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (3, 1), (-1, -1), 8),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+
+                # Grid
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('LINEAFTER', (0, 0), (0, -1), 1.5, colors.grey),  # Thick line after time
+            ]
+
+            # Highlight important entries
+            for i, entry in enumerate(timeline, start=1):
+                if entry.get('highlight'):
+                    table_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#FFF9E6')))
+
+            timeline_table.setStyle(TableStyle(table_style))
+            elements.append(timeline_table)
+
+            # Preparation checklist
+            if notes and notes.get('ingredients_prep'):
+                elements.append(Spacer(1, 0.2*inch))
+                prep_title = ParagraphStyle(
+                    'PrepTitle',
+                    parent=styles['Normal'],
+                    fontSize=10,
+                    fontName='Helvetica-Bold',
+                    spaceAfter=6
+                )
+                elements.append(Paragraph("PREPARATION CHECKLIST", prep_title))
+
+                prep_item_style = ParagraphStyle(
+                    'PrepItem',
+                    parent=styles['Normal'],
+                    fontSize=8,
+                    leftIndent=15
+                )
+
+                for item in notes['ingredients_prep']:
+                    elements.append(Paragraph(f"☐ {item}", prep_item_style))
+
+            # Page break after each day (except last)
+            if idx < len(self.report_data['daily_breakdown']) - 1:
+                elements.append(PageBreak())
+
+        # Build PDF
+        doc.build(elements)
+        print(f"Daily pages PDF saved: {filename}")
+
     def generate_daily_pages_excel(self, filename: str):
         """
         Generate Excel workbook with one clean page per day

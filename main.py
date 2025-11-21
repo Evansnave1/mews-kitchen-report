@@ -186,6 +186,10 @@ Examples:
             if 'excel' in args.format:
                 excel_file = output_dir / f"{base_filename}.xlsx"
                 generator.generate_daily_pages_excel(str(excel_file))
+
+            if 'pdf' in args.format:
+                pdf_file = output_dir / f"{base_filename}.pdf"
+                generator.generate_daily_pages_pdf(str(pdf_file))
         elif args.detailed:
             generator = DetailedReportGenerator(report)
             base_filename = f"meal_plan_detailed_{week_str}"
@@ -202,9 +206,9 @@ Examples:
 
         if 'pdf' in args.format:
             pdf_file = output_dir / f"{base_filename}.pdf"
-            if not args.detailed:
+            if not args.detailed and not args.daily_pages:
                 generator.generate_pdf(str(pdf_file))
-            else:
+            elif args.detailed:
                 print("Note: Detailed PDF not yet implemented, use Excel format for detailed reports")
 
         if 'json' in args.format:
